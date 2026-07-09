@@ -1,10 +1,8 @@
-name: Build Geode Mod (Omni-Engine)
+name: Build Geode Mod
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -14,38 +12,25 @@ jobs:
       matrix:
         config:
           - name: Windows
-            os: windows-2022
-            extra-flags: ""
-            
-          - name: Android
-            os: ubuntu-22.04
-            # Target both 32-bit and 64-bit Android platforms
-            extra-flags: "-DGEODE_ANDROID_ARCHS=arm32;arm64"
+            os: windows-latest
+            target: Win32
 
-    name: ${{ matrix.config.name }} Build
+          - name: Android32
+            os: ubuntu-latest
+            target: Android32
+
+          - name: Android64
+            os: ubuntu-latest
+            target: Android64
+
+    name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
 
     steps:
-      - name: Checkout Codebase
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build Geode Mod
+      - name: Build the Mod
         uses: geode-sdk/build-geode-mod@main
         with:
-          build-config: Release
-          combine: true
-          # Read additional Android architecture flags
-          extra-flags: ${{ matrix.config.extra-flags }}
-
-  publish:
-    name: Package Release Artifacts
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Upload Binary Package
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-architect-omni-engine
-          # This grabs the combined .geode zip package cooked by Geode's Action
-          path: |
-            build/*.geode
+          target: ${{ matrix.config.target }}
