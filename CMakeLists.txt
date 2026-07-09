@@ -11,9 +11,9 @@ add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 if (NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "GEODE_SDK environment variable is not set. Geode SDK was not found.")
-else()
-    message(STATUS "Using Geode SDK from: $ENV{GEODE_SDK}")
 endif()
+
+message(STATUS "Using Geode SDK from: $ENV{GEODE_SDK}")
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
