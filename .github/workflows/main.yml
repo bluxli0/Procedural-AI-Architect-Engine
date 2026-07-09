@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # Uses Node 20+ natively to stop warnings
 
       - name: Build the Mod
         uses: geode-sdk/build-geode-mod@main
