@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 jobs:
   build:
     strategy:
@@ -28,9 +31,11 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4 # Uses Node 20+ natively to stop warnings
+        uses: actions/checkout@v4
 
-      - name: Build the Mod
+      - name: Build Geode Mod
         uses: geode-sdk/build-geode-mod@main
         with:
           target: ${{ matrix.config.target }}
+          build-config: Release
+          combine: true
