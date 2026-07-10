@@ -2,47 +2,33 @@ name: Build Geode Mod
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
   workflow_dispatch:
 
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
-
 jobs:
-  windows:
-    name: Windows Build
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Build Windows Mod
-        uses: geode-sdk/build-geode-mod@main
-        with:
-          build-config: Release
-          combine: true
-
-  android:
-    name: ${{ matrix.target }} Build
-    runs-on: ubuntu-latest
-
+  build:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - Android32
-          - Android64
+        config:
+          - name: Windows
+            os: windows-latest
+          - name: Android
+            os: ubuntu-latest
+            # This targets both 32 and 64 bit in one go
+            extra-flags: "-DGEODE_ANDROID_ARCHS=arm32;arm64"
+
+    name: ${{ matrix.config.name }} Build
+    runs-on: ${{ matrix.config.os }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build Android Mod
+      - name: Build Mod
         uses: geode-sdk/build-geode-mod@main
         with:
-          target: ${{ matrix.target }}
-          build-config: Release
+          # THIS IS THE MAGIC LINE
           combine: true
+          build-config: Release
+          extra-flags: ${{ matrix.config.extra-flags }}
