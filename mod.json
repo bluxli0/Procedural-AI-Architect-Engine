@@ -1,9 +1,50 @@
 {
-  "geode": "3.7.4",
-  "gd": "2.206",
+  "geode": "5.7.1",
+  "gd": {
+    "win": "2.2081",
+    "android": "2.2081",
+    "mac": "2.2081",
+    "ios": "2.2081"
+  },
   "id": "aisure.ai_architect_omni",
-  "version": "1.2.0",
   "name": "AI Co-Creator Omni-Engine",
+  "version": "v1.2.0",
   "developer": "AISure & Director",
-  "description": "Procedural level sandbox with harmonic palettes, brush tools, live spawners, reset defaults, FX tools, and an ending designer."
+  "description": "Procedural level sandbox with harmonic palettes, brush tools, live spawners, reset defaults, FX tools, and an ending designer.",
+  "tags": [
+    "editor",
+    "utility",
+    "interface",
+    "enhancement",
+    "offline",
+    "procedural",
+    "level-generation"
+  ],
+  "links": {
+    "source": "https://github.com/YOUR_USERNAME/Procedural-AI-Architect-Engine"
+  },
+  "settings": {
+    "enable-touch-drawing": {
+      "type": "bool",
+      "name": "Enable Touch Drawing",
+      "description": "Allows the mod to place objects when tapping the editor canvas.",
+      "default": true
+    },
+    "default-bpm": {
+      "type": "int",
+      "name": "Default BPM",
+      "description": "Default BPM used by the procedural timeline generator.",
+      "default": 120,
+      "min": 60,
+      "max": 240
+    },
+    "default-difficulty": {
+      "type": "int",
+      "name": "Default Difficulty",
+      "description": "Controls generated obstacle density.",
+      "default": 5,
+      "min": 1,
+      "max": 10
+    }
+  }
 }
