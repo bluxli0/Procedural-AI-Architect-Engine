@@ -1,4 +1,4 @@
-name: Build Geode Mod (Debug + Slim)
+name: Build Geode Mod (Debug + Slim, Geode v5)
 
 on:
   push:
@@ -14,8 +14,8 @@ jobs:
       matrix:
         include:
           # Windows (Win64)
-          - { name: Windows-Debug,  os: windows-latest, target: Win64,    flavor: debug }
-          - { name: Windows-Slim,   os: windows-latest, target: Win64,    flavor: slim  }
+          - { name: Windows-Debug, os: windows-latest, target: Win64,    flavor: debug }
+          - { name: Windows-Slim,  os: windows-latest, target: Win64,    flavor: slim  }
           # Android32
           - { name: Android32-Debug, os: ubuntu-latest, target: Android32, flavor: debug }
           - { name: Android32-Slim,  os: ubuntu-latest, target: Android32, flavor: slim  }
@@ -31,9 +31,10 @@ jobs:
         id: build
         uses: geode-sdk/build-geode-mod@main
         with:
-          target: ${{ matrix.target }}                           # <-- required, sets --platform
+          sdk: latest                             # 👈 pin Geode v5 from the action
+          target: ${{ matrix.target }}            # maps to --platform
           build-config: ${{ matrix.flavor == 'debug' && 'RelWithDebInfo' || 'Release' }}
-          use-lto:      ${{ matrix.flavor == 'slim' }}          # Slim = LTO on, Debug = off
+          use-lto:      ${{ matrix.flavor == 'slim' }}  # Slim = LTO on, Debug = off
           export-pdb:   ${{ matrix.target == 'Win64' && matrix.flavor == 'debug' }}
           bundle-pdb:   ${{ matrix.target == 'Win64' && matrix.flavor == 'debug' }}
           export-debug: ${{ startsWith(matrix.target, 'Android') && matrix.flavor == 'debug' }}
@@ -50,23 +51,17 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Debug Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-      - name: Read mod metadata
-        id: meta
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - run: sudo apt-get update && sudo apt-get install -y jq
+      - id: meta
         run: |
           NAME=$(jq -r '.name' mod.json | tr ' ' '_' )
           VER=$(jq -r '.version' mod.json | sed 's/^v//')
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "ver=$VER" >> $GITHUB_OUTPUT
-      - name: Prepare release (Debug)
-        run: |
+      - run: |
           mkdir -p release-debug
           cp -f about.md release-debug/ 2>/dev/null || true
           cp -f changelog.md release-debug/ 2>/dev/null || true
@@ -78,12 +73,10 @@ jobs:
             done
           done
           [ -d resources ] && cp -r resources release-debug/resources || true
-      - name: Zip Debug Pack
-        run: |
+      - run: |
           cd release-debug
           zip -r "${{ steps.meta.outputs.name }}_${{ steps.meta.outputs.ver }}_Debug_Pack.zip" ./*
-      - name: Upload Debug Pack
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.meta.outputs.name }}_${{ steps.meta.outputs.ver }}_Debug_Pack
           path: release-debug/*.zip
@@ -93,23 +86,17 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Slim Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-      - name: Read mod metadata
-        id: meta
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - run: sudo apt-get update && sudo apt-get install -y jq
+      - id: meta
         run: |
           NAME=$(jq -r '.name' mod.json | tr ' ' '_' )
           VER=$(jq -r '.version' mod.json | sed 's/^v//')
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "ver=$VER" >> $GITHUB_OUTPUT
-      - name: Prepare release (Slim)
-        run: |
+      - run: |
           mkdir -p release-slim
           cp -f about.md release-slim/ 2>/dev/null || true
           cp -f changelog.md release-slim/ 2>/dev/null || true
@@ -121,12 +108,10 @@ jobs:
             done
           done
           [ -d resources ] && cp -r resources release-slim/resources || true
-      - name: Zip Slim Pack
-        run: |
+      - run: |
           cd release-slim
           zip -r "${{ steps.meta.outputs.name }}_${{ steps.meta.outputs.ver }}_Slim_Pack.zip" ./*
-      - name: Upload Slim Pack
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.meta.outputs.name }}_${{ steps.meta.outputs.ver }}_Slim_Pack
           path: release-slim/*.zip
