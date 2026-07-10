@@ -1,4 +1,4 @@
-name: Build Geode Mod
+name: Build Geode Mod (Debug + Slim)
 
 on:
   push:
@@ -7,28 +7,126 @@ on:
 
 jobs:
   build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - name: Windows
-            os: windows-latest
-          - name: Android
-            os: ubuntu-latest
-            # This targets both 32 and 64 bit in one go
-            extra-flags: "-DGEODE_ANDROID_ARCHS=arm32;arm64"
-
-    name: ${{ matrix.config.name }} Build
-    runs-on: ${{ matrix.config.os }}
+        include:
+          # Windows
+          - { name: Windows-Debug, os: windows-latest, target: Win32,    flavor: debug }
+          - { name: Windows-Slim,  os: windows-latest, target: Win32,    flavor: slim  }
+          # Android32
+          - { name: Android32-Debug, os: ubuntu-latest, target: Android32, flavor: debug }
+          - { name: Android32-Slim,  os: ubuntu-latest, target: Android32, flavor: slim  }
+          # Android64
+          - { name: Android64-Debug, os: ubuntu-latest, target: Android64, flavor: debug }
+          - { name: Android64-Slim,  os: ubuntu-latest, target: Android64, flavor: slim  }
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Mod
+      - name: Build
+        id: build
         uses: geode-sdk/build-geode-mod@main
         with:
-          # THIS IS THE MAGIC LINE
+          target: ${{ matrix.target }}
+          # Flavour controls
+          build-config: ${{ matrix.flavor == 'debug' && 'RelWithDebInfo' || 'Release' }}
+          use-lto:      ${{ matrix.flavor == 'slim' }}         # Slim = LTO on, Debug = off
+          export-pdb:   ${{ matrix.target == 'Win32' && matrix.flavor == 'debug' }}
+          bundle-pdb:   ${{ matrix.target == 'Win32' && matrix.flavor == 'debug' }}
+          export-debug: ${{ startsWith(matrix.target, 'Android') && matrix.flavor == 'debug' }}
           combine: true
-          build-config: Release
-          extra-flags: ${{ matrix.config.extra-flags }}
+
+      - name: Upload .geode
+        uses: actions/upload-artifact@v4
+        with:
+          name: geode-${{ matrix.name }}
+          path: ${{ steps.build.outputs.build-output }}/*.geode
+
+  package-debug:
+    name: Package Debug Pack
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Debug Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          NAME=$(jq -r '.name' mod.json | tr ' ' '_' )
+          ID=$(jq -r '.id' mod.json)
+          VER=$(jq -r '.version' mod.json | sed 's/^v//')
+          echo "NAME=$NAME" >> $GITHUB_ENV
+          echo "VER=$VER" >> $GITHUB_ENV
+          mkdir -p release-debug
+          cp -f about.md release-debug/ 2>/dev/null || true
+          cp -f changelog.md release-debug/ 2>/dev/null || true
+          # Pull only *-Debug artifacts
+          for a in artifacts/*-Debug; do
+            [ -d "$a" ] || continue
+            for f in "$a"/*.geode; do
+              base=$(basename "$a")
+              cp "$f" "release-debug/${NAME}_${VER}_${base}.geode"
+            done
+          done
+          [ -d resources ] && cp -r resources release-debug/resources || true
+      - name: Zip Debug Pack
+        run: |
+          cd release-debug
+          zip -r "${NAME}_${VER}_Debug_Pack.zip" ./*
+          ls -la
+      - name: Upload Debug Pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${NAME}_${VER}_Debug_Pack
+          path: release-debug/*.zip
+
+  package-slim:
+    name: Package Slim Pack
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Slim Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          NAME=$(jq -r '.name' mod.json | tr ' ' '_' )
+          VER=$(jq -r '.version' mod.json | sed 's/^v//')
+          echo "NAME=$NAME" >> $GITHUB_ENV
+          echo "VER=$VER" >> $GITHUB_ENV
+          mkdir -p release-slim
+          cp -f about.md release-slim/ 2>/dev/null || true
+          cp -f changelog.md release-slim/ 2>/dev/null || true
+          # Pull only *-Slim artifacts
+          for a in artifacts/*-Slim; do
+            [ -d "$a" ] || continue
+            for f in "$a"/*.geode; do
+              base=$(basename "$a")
+              cp "$f" "release-slim/${NAME}_${VER}_${base}.geode"
+            done
+          done
+          [ -d resources ] && cp -r resources release-slim/resources || true
+      - name: Zip Slim Pack
+        run: |
+          cd release-slim
+          zip -r "${NAME}_${VER}_Slim_Pack.zip" ./*
+          ls -la
+      - name: Upload Slim Pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${NAME}_${VER}_Slim_Pack
+          path: release-slim/*.zip
