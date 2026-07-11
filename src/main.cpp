@@ -1,11 +1,17 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/LevelEditorLayer.hpp>
+#include <Geode/modify/EditorUI.hpp>
 #include <Geode/utils/cocos.hpp>
 #include <vector>
 #include <string>
 #include <cmath>
 
 using namespace geode::prelude;
+
+// ==========================================
+// Global handle to current LevelEditorLayer
+// ==========================================
+static LevelEditorLayer* g_omniEditor = nullptr;
 
 // ==========================================
 // 🎨 TYPES, CONSTANTS & CONFIGURATION ENUMS
@@ -38,7 +44,7 @@ public:
             else if (h < 240) { g = x; b = c; }
             else if (h < 300) { r = x; b = c; }
             else { r = c; b = x; }
-            return { static_cast<GLubyte>((r + m) * 255), static_cast<GLubyte>((g + m) * 255), static_cast<GLubyte>((b + m) * 255) };
+            return { (GLubyte)((r + m) * 255), (GLubyte)((g + m) * 255), (GLubyte)((b + m) * 255) };
         };
         return {
             hsvToRgb(baseHue, 0.85f, 0.9f),
@@ -265,16 +271,14 @@ protected:
         m_activeBrush = s->getTag();
     }
 
-    // SAFER: spawn effects at a known-safe anchor, not via private camera/layer members
     void onInstantTriggerEffect(CCObject* s) {
         if (!m_editor || !s) return;
         int fx = s->getTag();
-        float tx = 500.0f + (fx * 120.0f); // safe, visible near level start
+        float tx = 500.0f + (fx * 120.0f);
         ProArchitectEngine::injectEffectSystem(m_editor, tx, 150.0f, static_cast<EffectStyle>(fx));
         Notification::create("Effect Generated @ x≈500", NotificationIcon::Success, 1.0f)->show();
     }
 
-    // SAFER: temporary no-op to avoid private-array access; reintroduce later with public APIs
     void onClearObjects(CCObject*) {
         Notification::create("Wipe disabled in safe build", NotificationIcon::Info, 1.2f)->show();
     }
@@ -312,31 +316,63 @@ public:
 };
 
 // ==========================================
-// 🧩 GEODE EDITOR LAYER HOOK (ROBUST INJECTION)
+// 🧩 HOOK: Track current LevelEditorLayer
 // ==========================================
-class $modify(ProEditor, LevelEditorLayer) {
+class $modify(OmniLEL, LevelEditorLayer) {
+    bool init(GJGameLevel* l, bool p1) {
+        if (!LevelEditorLayer::init(l, p1)) return false;
+        g_omniEditor = this;
+        log::info("[Omni] LevelEditorLayer initialised; editor stored.");
+        return true;
+    }
+};
+
+// ==========================================
+// 🧩 HOOK: Inject button into EditorUI robustly
+// ==========================================
+class $modify(OmniEditorUI, EditorUI) {
     CCMenuItemSpriteExtra* makeOmniButton() {
         auto spr = ButtonSprite::create("OMNI BUILD", "goldFont.fnt", "GJ_button_01.png", 0.7f);
-        auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(ProEditor::openOmni));
+        auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(OmniEditorUI::onOpenOmni));
         btn->setID("omni-build-btn");
         return btn;
     }
 
-    bool init(GJGameLevel* l, bool p1) {
-        if (!LevelEditorLayer::init(l, p1)) return false;
+    void injectFloating() {
+        auto win = CCDirector::sharedDirector()->getWinSize();
+        auto floatMenu = CCMenu::create();
+        floatMenu->setPosition({win.width - 90.0f, 60.0f});
+        floatMenu->addChild(makeOmniButton());
+        this->addChild(floatMenu, 99999);
+        log::warn("[Omni] Floating button fallback added (EditorUI).");
+    }
+
+    bool init(LevelEditorLayer* lel) {
+        if (!EditorUI::init(lel)) return false;
+
+        // Try to inject after UI has laid out by deferring one frame
+        this->runAction(CCSequence::create(
+            CCDelayTime::create(0.05f),
+            CCCallFunc::create(this, callfunc_selector(OmniEditorUI::deferredInject)),
+            nullptr
+        ));
+        return true;
+    }
+
+    void deferredInject() {
         bool placed = false;
 
-        // 1) Preferred: editor-menus -> bottom-menu
+        // 1) Preferred: try to find any CCMenu with ID "bottom-menu"
         if (auto menus = this->getChildByID("editor-menus")) {
             if (auto bottom = menus->getChildByID("bottom-menu")) {
                 bottom->addChild(makeOmniButton());
                 if (auto m = typeinfo_cast<CCMenu*>(bottom)) m->updateLayout();
                 placed = true;
-                log::info("[Omni] Injected into bottom-menu");
+                log::info("[Omni] Injected into bottom-menu (EditorUI).");
             }
         }
 
-        // 2) Fallback: first CCMenu found in the hierarchy
+        // 2) Fallback: first CCMenu in EditorUI hierarchy
         if (!placed) {
             CCNode* found = nullptr;
             std::function<void(CCNode*)> dfs = [&](CCNode* n) {
@@ -354,26 +390,25 @@ class $modify(ProEditor, LevelEditorLayer) {
                 found->addChild(makeOmniButton());
                 if (auto m = typeinfo_cast<CCMenu*>(found)) m->updateLayout();
                 placed = true;
-                log::info("[Omni] Injected into first CCMenu fallback");
+                log::info("[Omni] Injected into first CCMenu fallback (EditorUI).");
             }
         }
 
-        // 3) Last resort: floating button at bottom-right
+        // 3) Last resort: floating overlay
         if (!placed) {
-            auto win = CCDirector::sharedDirector()->getWinSize();
-            auto floatMenu = CCMenu::create();
-            floatMenu->setPosition({win.width - 90.0f, 60.0f});
-            floatMenu->addChild(makeOmniButton());
-            this->addChild(floatMenu, 99999);
-            log::warn("[Omni] Floating button fallback added at bottom-right");
+            injectFloating();
         }
 
         Notification::create("Omni ready — bottom toolbar or bottom-right.", NotificationIcon::Success, 1.5f)->show();
-        return true;
     }
 
-    void openOmni(CCObject*) {
-        log::info("AI Architect Omni: built for Geode SDK 5.80; requires Loader >= 5.80; GD 2.2081.");
-        if (auto dlg = ProArchitectUIDock::create(this)) dlg->show();
+    void onOpenOmni(CCObject*) {
+        if (!g_omniEditor) {
+            Notification::create("Editor not ready yet.", NotificationIcon::Warning, 1.2f)->show();
+            log::warn("[Omni] No LevelEditorLayer handle when opening panel.");
+            return;
+        }
+        log::info("AI Architect Omni: SDK 5.80; requires Loader >= 5.80; GD 2.2081.");
+        if (auto dlg = ProArchitectUIDock::create(g_omniEditor)) dlg->show();
     }
 };
