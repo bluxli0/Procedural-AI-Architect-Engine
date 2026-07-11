@@ -38,11 +38,7 @@ public:
             else if (h < 240) { g = x; b = c; }
             else if (h < 300) { r = x; b = c; }
             else { r = c; b = x; }
-            return {
-                static_cast<GLubyte>((r + m) * 255),
-                static_cast<GLubyte>((g + m) * 255),
-                static_cast<GLubyte>((b + m) * 255)
-            };
+            return { static_cast<GLubyte>((r + m) * 255), static_cast<GLubyte>((g + m) * 255), static_cast<GLubyte>((b + m) * 255) };
         };
         return {
             hsvToRgb(baseHue, 0.85f, 0.9f),
@@ -90,15 +86,15 @@ public:
         editor->createObject(1979, {x + 150.0f, y}, true);
         switch (theme) {
             case CINEMATIC_SLOMO:
-                editor->createObject(1915, {x, y},           true);
-                editor->createObject(899,  {x - 30.0f, y},   true);
+                editor->createObject(1915, {x, y},         true);
+                editor->createObject(899,  {x - 30.0f, y}, true);
                 break;
             case TEXT_CREDIT_REEL:
-                editor->createObject(3910, {x, y + 80.0f},   true);
+                editor->createObject(3910, {x, y + 80.0f}, true);
                 break;
             case QUANTUM_SINGULARITY:
-                editor->createObject(8505, {x, y},           true);
-                editor->createObject(8510, {x - 10.0f, y},   true);
+                editor->createObject(8505, {x, y},         true);
+                editor->createObject(8510, {x - 10.0f, y}, true);
                 break;
         }
     }
@@ -240,9 +236,7 @@ protected:
         std::vector<cocos2d::ccColor3B> cols = {pal.primary, pal.secondary, pal.accent};
         for (size_t i = 0; i < cols.size(); ++i) {
             auto b = cocos2d::CCSprite::createWithSpriteFrameName("square_01_001.png");
-            b->setColor(cols[i]);
-            b->setScale(0.5f);
-            b->setPositionX(static_cast<float>(i * 25.0f));
+            b->setColor(cols[i]); b->setScale(0.5f); b->setPositionX(static_cast<float>(i * 25.0f));
             m_palettePreviewNode->addChild(b);
         }
     }
@@ -275,12 +269,12 @@ protected:
     void onInstantTriggerEffect(CCObject* s) {
         if (!m_editor || !s) return;
         int fx = s->getTag();
-        float tx = 500.0f + (fx * 120.0f); // 500 base + spaced offsets by fx index
+        float tx = 500.0f + (fx * 120.0f); // safe, visible near level start
         ProArchitectEngine::injectEffectSystem(m_editor, tx, 150.0f, static_cast<EffectStyle>(fx));
-        Notification::create("Effect Generated!", NotificationIcon::Success, 1.0f)->show();
+        Notification::create("Effect Generated @ x≈500", NotificationIcon::Success, 1.0f)->show();
     }
 
-    // SAFER: temporary no-op to avoid private array access; reintroduce later with public APIs
+    // SAFER: temporary no-op to avoid private-array access; reintroduce later with public APIs
     void onClearObjects(CCObject*) {
         Notification::create("Wipe disabled in safe build", NotificationIcon::Info, 1.2f)->show();
     }
@@ -318,40 +312,9 @@ public:
 };
 
 // ==========================================
-// 🧩 GEODE EDITOR LAYER HOOK (SAFE INJECTION)
+// 🧩 GEODE EDITOR LAYER HOOK (ROBUST INJECTION)
 // ==========================================
 class $modify(ProEditor, LevelEditorLayer) {
-    bool init(GJGameLevel* l, bool p1) {
-        if (!LevelEditorLayer::init(l, p1)) return false;
-
-        // Guarded UI lookups to avoid null access while editor UI is still spawning
-        auto menu = this->getChildByID("editor-menus");
-        if (!menu) {
-            log::warn("editor-menus not found; skipping button injection");
-            return true;
-        }
-        auto bMenu = menu->getChildByID("bottom-menu");
-        if (!bMenu) {
-            log::warn("bottom-menu not found; skipping button injection");
-            return true;
-        }
-
-        auto btn = CCMenuItemSpriteExtra::create(
-            ButtonSprite::create("OMNI BUILD", "goldFont.fnt", "GJ_button_01.png", 0.7f),
-            this, menu_selector(ProEditor::openOmni)
-        );
-        bMenu->addChild(btn);
-        if (auto cm = typeinfo_cast<CCMenu*>(bMenu)) cm->updateLayout();
-
-        return true;
-    }
-
-    void openOmni(CCObject*) {
-        if (auto dlg = ProArchitectUIDock::create(this)) dlg->show();
-    }
-};
-class $modify(ProEditor, LevelEditorLayer) {
-    // Helper to create our menu button
     CCMenuItemSpriteExtra* makeOmniButton() {
         auto spr = ButtonSprite::create("OMNI BUILD", "goldFont.fnt", "GJ_button_01.png", 0.7f);
         auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(ProEditor::openOmni));
@@ -405,8 +368,7 @@ class $modify(ProEditor, LevelEditorLayer) {
             log::warn("[Omni] Floating button fallback added at bottom-right");
         }
 
-        // Notify user where to look
-        Notification::create("Omni ready — look bottom toolbar (or bottom-right).", NotificationIcon::Success, 1.5f)->show();
+        Notification::create("Omni ready — bottom toolbar or bottom-right.", NotificationIcon::Success, 1.5f)->show();
         return true;
     }
 
@@ -415,17 +377,3 @@ class $modify(ProEditor, LevelEditorLayer) {
         if (auto dlg = ProArchitectUIDock::create(this)) dlg->show();
     }
 };
-// Replace your onInstantTriggerEffect
-void onInstantTriggerEffect(CCObject* s) {
-    if (!m_editor || !s) return;
-    int fx = s->getTag();
-    // Safe, visible anchor: near the editor start
-    float tx = 500.0f + (fx * 120.0f);
-    ProArchitectEngine::injectEffectSystem(m_editor, tx, 150.0f, static_cast<EffectStyle>(fx));
-    Notification::create("Effect Generated @ x≈500", NotificationIcon::Success, 1.0f)->show();
-}
-
-// Replace your onClearObjects (disable for now to avoid private-array access)
-void onClearObjects(CCObject*) {
-    Notification::create("Wipe disabled in safe build", NotificationIcon::Info, 1.2f)->show();
-}
